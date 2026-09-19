@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#060a13">
+  <meta name="description" content="Gienah is an out-of-process Ruby plugin host with capability gates.">
+  <title>Gienah — An out-of-process plugin host for Ruby</title>
+  <link rel="stylesheet" href="site.css">
+</head>
+<body style="--accent:#e5adf2">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#"><span class="star-mark"></span>Gienah</a>
+    <nav aria-label="Primary navigation"><a href="#features">Capabilities</a><a href="#install">Install</a><a href="https://github.com/noxdea/gienah">GitHub</a></nav>
+  </header>
+  <main id="main">
+    <section class="hero">
+      <div>
+        <p class="constellation">γ Corvi · plugin host</p>
+        <h1>Keep plugins at arm’s length.</h1>
+        <p class="lede">A small out-of-process Ruby plugin host with framed RPC, activation lifecycle, capability gates, and a focused plugin SDK.</p>
+        <div class="actions"><a class="button primary" href="#install">Install Gienah</a><a class="button" href="https://github.com/noxdea/gienah">View source</a></div>
+        <ul class="facts"><li><strong>Out of process</strong></li><li>Ruby ≥ 3.1</li><li>MIT licensed</li></ul>
+      </div>
+      <div class="instrument" aria-label="Plugin host activation example">
+        <div class="instrument-head"><span>host / example plugin</span><span class="signal">active</span></div>
+        <div class="instrument-body">
+          <div class="diagram">
+            <span class="orbit" aria-hidden="true"></span>
+            <div class="node nw"><strong>Manifest</strong>api 1<br>onStartup</div>
+            <div class="node ne"><strong>RPC</strong>Content-Length<br>framed</div>
+            <div class="node core"><strong>Gienah host</strong>plugin example<br>pid 9134</div>
+            <div class="node sw"><strong>Capability</strong>workspace.notify<br>granted</div>
+            <div class="node se"><strong>Sandbox</strong>saiph<br>required</div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="features" id="features">
+      <div class="section-heading"><h2>A smaller blast radius.</h2><p>Gienah keeps extension code outside the host process and checks declared capabilities before a plugin can call application methods.</p></div>
+      <div class="feature-grid">
+        <article><h3>Process isolation</h3><p>Run plugin entrypoints as child processes connected through bounded framed messages.</p></article>
+        <article><h3>Capability gates</h3><p>Reject unknown declarations and deny host methods until the matching capability is granted.</p></article>
+        <article><h3>Lifecycle control</h3><p>Discover manifests, activate on a named reason, make timeout-aware calls, and shut down cleanly.</p></article>
+      </div>
+    </section>
+    <section class="install" id="install">
+      <div class="install-copy"><h2>Host a plugin.</h2><p>Expose only application-specific methods, then activate manifests when their reason occurs.</p></div>
+      <div class="terminal"><div class="terminal-bar">Ruby</div><pre><span class="prompt">$</span> bundle add gienah
+
+host = Gienah::Host.new(api_version: 1)
+host.expose("workspace/notify") { |params|
+  puts params.fetch("message")
+}
+host.discover(["plugins"])
+host.activate("example", reason: "onStartup")</pre></div>
+    </section>
+  </main>
+  <footer><p>Gienah · Pure Ruby · MIT</p><div><a href="https://rubygems.org/gems/gienah">RubyGems</a><a href="https://github.com/noxdea/gienah">GitHub</a></div></footer>
+</body>
+</html>
