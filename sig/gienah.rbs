@@ -1,0 +1,116 @@
+module Gienah
+  VERSION: String
+
+  type json = nil | bool | Integer | Float | String | Array[json] | Hash[String, json]
+
+  class Error < StandardError
+  end
+
+  class CapabilityDenied < Error
+  end
+
+  class Timeout < Error
+  end
+
+  class ProtocolError < Error
+  end
+
+  class LifecycleError < Error
+  end
+
+  class Manifest
+    attr_reader id: String
+    attr_reader name: String
+    attr_reader version: String
+    attr_reader api_version: Integer
+    attr_reader entry: String
+    attr_reader activation: Array[String]
+    attr_reader capabilities: Array[String]
+    attr_reader contributes: Hash[String, json]
+    attr_reader limits: Hash[String, Numeric]
+    attr_reader root: String
+    def self.load: (String path) -> Manifest
+    def self.from_hash: (Hash[String, untyped] value, ?root: String) -> Manifest
+  end
+
+  module Protocol
+    MAX_MESSAGE: Integer
+    MAX_HEADER: Integer
+    def self.frame: (Hash[String, untyped] message, ?max_size: Integer) -> String
+    def self.read: (IO io, ?max_size: Integer) -> Hash[String, untyped]?
+    def self.validate_message: (Hash[String, untyped] message) -> Hash[String, untyped]
+    def self.request: (Integer id, String method, ?json params) -> Hash[String, untyped]
+    def self.notification: (String method, ?json params) -> Hash[String, untyped]
+    def self.response: (Integer id, ?result: json, ?error: Hash[String, json]) -> Hash[String, untyped]
+  end
+
+  class Future
+    attr_reader id: Integer
+    def initialize: (Integer id, ?on_cancel: ^(Integer) -> untyped) -> void
+    def fulfill: (?untyped value, ?error: Exception?) -> Future
+    def await: (?timeout: Numeric?) -> untyped
+    def then: () { (untyped, Exception?) -> untyped } -> Future
+    def cancel: () -> bool
+    def done?: () -> bool
+  end
+
+  module Sandbox
+    def self.dangerous?: (Array[String] capabilities) -> bool
+    def self.policy_for: (Array[String] capabilities, root: String) -> untyped
+    def self.available?: () -> bool
+    def self.ensure_safe!: (Array[String] capabilities) -> void
+  end
+
+  class Transport
+    attr_reader pid: Integer
+    def self.open: (Array[String] command, ?cwd: String?, ?env: Hash[String, String], ?policy: untyped) { (Hash[String, untyped]?, Exception?) -> untyped } -> Transport
+    def write: (Hash[String, untyped] message, ?max_size: Integer) -> nil
+    def alive?: () -> bool
+    def close: (?grace: Numeric) -> bool
+  end
+
+  class Host
+    attr_reader api_version: Integer
+    def initialize: (api_version: Integer, ?dispatch: ^(Instance, String, json) -> untyped, ?sandbox: bool, ?restart: Hash[Symbol, untyped], ?limits: Hash[Symbol, Numeric], ?transport_factory: ^(Manifest) { (Manifest) -> Transport }) -> void
+    def expose: (String method, ?capability: String?) { (Instance, json) -> untyped } -> Host
+    def discover: (Array[String] directories) -> Array[Manifest]
+    def add: (Manifest manifest) -> Manifest
+    def activate: (String id, reason: String) -> Instance?
+    def deactivate: (String id) -> untyped
+    def instances: () -> Array[Instance]
+    def on_contribution: () { (String, Hash[String, json]) -> untyped } -> Host
+    def on_error: () { (Exception, Instance?) -> untyped } -> Host
+    def shutdown: () -> untyped
+  end
+
+  class Instance
+    attr_reader id: String
+    attr_reader manifest: Manifest
+    attr_reader state: Symbol
+    def start: () -> Instance
+    def call: (String method, ?json params, ?timeout: Numeric?) -> Future
+    def notify: (String method, ?json params) -> nil
+    def granted?: (String capability) -> bool
+    def kill: () -> nil
+    def shutdown: () -> untyped
+  end
+
+  module Plugin
+    def self.export: (String name) { (json) -> untyped } -> nil
+    def self.on: (String event) { (json) -> untyped } -> nil
+    def self.call: (String method, ?json params) -> untyped
+    def self.notify: (String method, ?json params) -> nil
+    def self.capability?: (String name) -> bool
+    def self.run: (?input: IO, ?output: IO) -> nil
+  end
+
+  module Testing
+    class FakePlugin
+      attr_reader capabilities: Array[String]
+      def initialize: (?capabilities: Array[String]) -> void
+      def export: (String method) { (json) -> untyped } -> FakePlugin
+      def on_notification: () { (String, json) -> untyped } -> FakePlugin
+      def transport: (Manifest) { (Hash[String, untyped]?, Exception?) -> untyped } -> Transport
+    end
+  end
+end
