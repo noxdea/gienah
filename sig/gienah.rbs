@@ -78,6 +78,7 @@ module Gienah
     def activate: (String id, reason: String) -> Instance?
     def deactivate: (String id) -> untyped
     def instances: () -> Array[Instance]
+    def disabled?: (String id) -> bool
     def on_contribution: () { (String, Hash[String, json]) -> untyped } -> Host
     def on_error: () { (Exception, Instance?) -> untyped } -> Host
     def shutdown: () -> untyped

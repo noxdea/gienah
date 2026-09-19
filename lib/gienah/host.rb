@@ -23,6 +23,7 @@ module Gienah
       @error_handlers = []
       @lock = Mutex.new
       @restart_history = Hash.new { |hash, key| hash[key] = [] }
+      @disabled = {}
       @shutting_down = false
     end
 
@@ -53,13 +54,17 @@ module Gienah
       raise ArgumentError, "expected Gienah::Manifest" unless manifest.is_a?(Manifest)
       raise LifecycleError, "unsupported plugin api version #{manifest.api_version}" unless manifest.api_version == @api_version
 
-      @lock.synchronize { @manifests[manifest.id] = manifest }
+      @lock.synchronize do
+        @manifests[manifest.id] = manifest
+        @disabled.delete(manifest.id)
+      end
       @contribution_handlers.each { |handler| handler.call(manifest.id, manifest.contributes) }
       manifest
     end
 
     def activate(id, reason:)
       manifest = @lock.synchronize { @manifests.fetch(id.to_s) { raise ArgumentError, "unknown plugin: #{id}" } }
+      raise LifecycleError, "plugin #{id} is disabled" if @lock.synchronize { @disabled.key?(id.to_s) }
       return @instances[id.to_s] if @instances.key?(id.to_s)
       return nil unless activation_matches?(manifest.activation, reason.to_s)
 
@@ -81,6 +86,10 @@ module Gienah
 
     def instances
       @lock.synchronize { @instances.values.dup }
+    end
+
+    def disabled?(id)
+      @lock.synchronize { @disabled.key?(id.to_s) }
     end
 
     def on_contribution(&block)
@@ -156,7 +165,11 @@ module Gienah
           nil
         end
       end
-      return unless history
+      unless history
+        @lock.synchronize { @disabled[instance.id] = true }
+        report_error(LifecycleError.new("plugin #{instance.id} disabled after repeated failures"), instance)
+        return
+      end
 
       index = history.length - 1
       backoff = Array(config.fetch(:backoff))
