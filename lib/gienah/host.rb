@@ -229,11 +229,12 @@ module Gienah
     def start
       transition(:starting, from: :inactive)
       @transport = @host.transport_for(self) { |message, error| receive(message, error) }
+      startup_timeout = @manifest.limits.fetch("startup_timeout_ms", 5_000).to_f / 1_000
       response = request("initialize", {
         "api_version" => @host.api_version,
         "capabilities" => @manifest.capabilities,
         "host" => {"name" => "gienah", "version" => Gienah::VERSION}
-      }).await(timeout: @manifest.limits.fetch("startup_timeout_ms", 5_000).to_f / 1_000)
+      }, timeout: startup_timeout).await(timeout: startup_timeout)
       raise LifecycleError, "plugin initialization failed" unless response.is_a?(Hash)
 
       transition(:ready, from: :starting)
