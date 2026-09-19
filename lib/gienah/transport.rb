@@ -4,6 +4,10 @@ module Gienah
   class Transport
     attr_reader :pid
 
+    def self.windows?
+      /mswin|mingw/.match?(RbConfig::CONFIG.fetch("host_os"))
+    end
+
     def self.open(command, cwd: nil, env: {}, policy: nil, &receive)
       raise ArgumentError, "receiver required" unless receive
       raise ArgumentError, "command must be a nonempty Array" unless command.is_a?(Array) && !command.empty?
@@ -11,8 +15,10 @@ module Gienah
       input_read, input_write = IO.pipe
       output_read, output_write = IO.pipe
       error_read, error_write = IO.pipe
+      [input_read, input_write, output_read, output_write, error_read, error_write].each(&:binmode)
       options = {in: input_read, out: output_write, err: error_write, close_others: true}
       options[:chdir] = cwd if cwd
+      options[:new_pgroup] = true if windows?
       pid = if policy
         require "saiph"
         Saiph.spawn(command, policy: policy, **options, env: env)
@@ -131,9 +137,13 @@ module Gienah
     end
 
     def terminate(signal)
-      Process.kill(signal, @pid)
-    rescue Errno::ESRCH
+      Process.kill(windows? ? "KILL" : signal, @pid)
+    rescue Errno::ESRCH, Errno::ECHILD
       nil
+    end
+
+    def windows?
+      self.class.windows?
     end
   end
 end
