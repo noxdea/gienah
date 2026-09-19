@@ -5,7 +5,7 @@ require_relative "lib/gienah/version"
 Gem::Specification.new do |spec|
   spec.name = "gienah"
   spec.version = Gienah::VERSION
-  spec.authors = ["ydah"]
+  spec.authors = ["Yudai Takada"]
   spec.email = ["t.yudai92@gmail.com"]
 
   spec.summary = "Out-of-process Ruby plugin host"
