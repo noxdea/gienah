@@ -224,6 +224,7 @@ module Gienah
       raise LifecycleError, "plugin initialization failed" unless response.is_a?(Hash)
 
       transition(:ready, from: :starting)
+      notify("initialized", {"api_version" => @host.api_version})
       self
     rescue StandardError => error
       @lock.synchronize { @state = :failed }
@@ -244,7 +245,22 @@ module Gienah
     end
 
     def granted?(capability)
-      @manifest.capabilities.include?(capability.to_s)
+      requested = capability.to_s
+      return true if @manifest.capabilities.include?(requested)
+
+      # Reserved host-pattern capabilities are intentionally matched here so
+      # applications can expose one generic method and still keep the gate
+      # fail-closed for every other host.
+      if requested.start_with?("net:")
+        host = requested.delete_prefix("net:")
+        return @manifest.capabilities.any? do |entry|
+          next false unless entry.start_with?("net:")
+
+          pattern = entry.delete_prefix("net:")
+          File.fnmatch?(pattern, host, File::FNM_DOTMATCH)
+        end
+      end
+      false
     end
 
     def kill
@@ -285,6 +301,24 @@ module Gienah
         @transport&.write(Protocol.notification("$/cancel", {"id" => request_id}), max_size: max_message_size)
       })
       @lock.synchronize { @pending[id] = future }
+      deadline = timeout || @host.request_timeout(@manifest)
+      unless deadline.is_a?(Numeric) && deadline.finite? && deadline.positive?
+        @lock.synchronize { @pending.delete(id) }
+        raise ArgumentError, "timeout must be finite and positive"
+      end
+      timer = Thread.new do
+        sleep(deadline)
+        next if future.done?
+
+        begin
+          @transport&.write(Protocol.notification("$/cancel", {"id" => id}), max_size: max_message_size)
+        rescue StandardError
+          nil
+        end
+        future.fulfill(error: Timeout.new("request #{id} timed out"))
+      end
+      timer.report_on_exception = false
+      future.then { |_value, _error| timer.kill if timer.alive? && timer != Thread.current }
       begin
         @transport.write(Protocol.request(id, method, params), max_size: max_message_size)
       rescue StandardError => error
